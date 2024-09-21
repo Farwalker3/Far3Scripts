@@ -1,6 +1,6 @@
-# PDF to 3D Card Converter
+# PDF Split To Image
 
-This project provides a GUI application for converting PDF files into images and creating a 3D card representation using the front and back images.
+This project provides a GUI application for converting PDF files into images.
 
 ## Table of Contents
 - [Requirements](#requirements)
