@@ -28,7 +28,7 @@ class PDFTo3DCardApp:
         self.root = root
         self.root.title("PDF to 3D Card Converter")
 
-        self.upload_button = tk.Button(root, text="Upload PDF(s)", command=self.upload_files)
+        self.upload_button = tk.Button(root, text="Select Folder with PDF(s)", command=self.select_folder)
         self.upload_button.pack(pady=10)
 
         self.result_label = tk.Label(root, text="")
@@ -36,13 +36,16 @@ class PDFTo3DCardApp:
 
         self.saved_images = []
 
-    def upload_files(self):
-        file_paths = filedialog.askopenfilenames(title="Select PDF files", filetypes=[("PDF files", "*.pdf")])
-        if not file_paths:
+    def select_folder(self):
+        folder_path = filedialog.askdirectory(title="Select Folder with PDF(s)")
+        if not folder_path:
             return
 
-        for file_path in file_paths:
-            self.process_pdf(file_path)
+        for root_dir, dirs, files in os.walk(folder_path):
+            for file in files:
+                if file.lower().endswith(".pdf"):
+                    pdf_path = os.path.join(root_dir, file)
+                    self.process_pdf(pdf_path)
 
     def process_pdf(self, pdf_path):
         try:
@@ -75,10 +78,19 @@ class PDFTo3DCardApp:
         img = Image.open(front_image_path)
         width, height = img.size
 
-        left_side = img.crop((0, 0, width // 2, height))
-        right_side = img.crop((width // 2, 0, width, height))
-        left_side.save(back_image_path)  # Back side
-        right_side.save(front_image_path)  # Front side
+        # Detect whether the PDF is vertical or horizontal
+        if width > height:
+            # Horizontal PDF, split left and right
+            left_side = img.crop((0, 0, width // 2, height))
+            right_side = img.crop((width // 2, 0, width, height))
+            left_side.save(back_image_path)  # Back side
+            right_side.save(front_image_path)  # Front side
+        else:
+            # Vertical PDF, split top and bottom
+            top_side = img.crop((0, 0, width, height // 2))
+            bottom_side = img.crop((0, height // 2, width, height))
+            top_side.save(front_image_path)  # Front side
+            bottom_side.save(back_image_path)  # Back side
 
         return front_image_path, back_image_path
 
