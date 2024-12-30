@@ -3,13 +3,13 @@ import sys
 import subprocess
 import streamlit as st
 from PIL import Image
-from pdf2image import convert_from_path, PDFInfoNotInstalledError
+import fitz  # PyMuPDF
 
 # Function to install missing libraries
 def install_libraries():
     try:
         import pip
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow", "--quiet"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow", "PyMuPDF", "--quiet"])
     except Exception as e:
         st.error(f"Failed to install libraries: {e}")
         sys.exit()
@@ -21,21 +21,23 @@ except ImportError:
     install_libraries()
     from PIL import Image
 
-# Function to handle the PDF to Image conversion
+# Function to handle the PDF to Image conversion using PyMuPDF (fitz)
 def convert_and_split_pdf(pdf_path, filename):
-    try:
-        pages = convert_from_path(pdf_path, dpi=300)
-    except PDFInfoNotInstalledError:
-        st.error("Poppler is not installed. Please ensure Poppler is installed and in the system PATH.")
-        sys.exit()
+    doc = fitz.open(pdf_path)
 
+    # Get the first page
+    page = doc.load_page(0)
+    pix = page.get_pixmap(dpi=300)  # Get a pixmap of the page with 300 dpi
+
+    # Create output directory
     temp_folder = "outputs"
     os.makedirs(temp_folder, exist_ok=True)
 
     front_image_path = os.path.join(temp_folder, f'{filename}_front.jpg')
     back_image_path = os.path.join(temp_folder, f'{filename}_back.jpg')
 
-    pages[0].save(front_image_path, 'JPEG')
+    # Save the image of the first page (front)
+    pix.save(front_image_path)
     img = Image.open(front_image_path)
     width, height = img.size
 
