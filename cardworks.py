@@ -1,59 +1,35 @@
 import os
-import subprocess
 import sys
-import streamlit as st
-from pdf2image import convert_from_path
+import subprocess
+import tkinter as tk
+from tkinter import filedialog, messagebox
 from PIL import Image
-import numpy as np
-import tempfile
+from pdf2image import convert_from_path, PDFInfoNotInstalledError
 
-# Function to check and install required packages
-def install(package):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-
-# List of required packages
-required_packages = ["pdf2image", "Pillow", "trimesh", "numpy"]
-
-# Check for each package and install if not present
-for package in required_packages:
+# Function to install missing libraries
+def install_libraries():
     try:
-        __import__(package)
-    except ImportError:
-        st.write(f"Installing {package}...")
-        install(package)
-
-# Function to process the uploaded PDF and convert it to images
-def process_pdf(pdf_file):
-    try:
-        # Save the uploaded file to a temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            tmp_file.write(pdf_file.read())
-            tmp_file_path = tmp_file.name
-
-        # Convert the uploaded PDF to images
-        filename = os.path.splitext(pdf_file.name)[0]
-        front_image_path, back_image_path = convert_and_split_pdf(tmp_file_path, filename)
-
-        # Optionally, you can uncomment this to create the 3D model
-        # model_path = create_3d_card(front_image_path, back_image_path)
-
-        # Display the processed images
-        st.image(front_image_path, caption="Front Image", use_column_width=True)
-        st.image(back_image_path, caption="Back Image", use_column_width=True)
-
-        # Update result text
-        st.success(f"Processed: {filename}\n"
-                   f"Front: {front_image_path}\n"
-                   f"Back: {back_image_path}\n"
-                   # f"Model: {model_path}"
-                   )
-
+        import pip
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow", "--quiet"])
     except Exception as e:
-        st.error(f"An error occurred: {e}")
+        messagebox.showerror("Error", f"Failed to install libraries: {e}")
+        sys.exit()
 
-# Function to convert and split PDF into front and back images
+# Try to import Pillow, install it if not found
+try:
+    from PIL import Image
+except ImportError:
+    install_libraries()
+    from PIL import Image
+
+# Function to handle the PDF to Image conversion
 def convert_and_split_pdf(pdf_path, filename):
-    pages = convert_from_path(pdf_path, dpi=300)
+    try:
+        pages = convert_from_path(pdf_path, dpi=300)
+    except PDFInfoNotInstalledError:
+        messagebox.showerror("Poppler Error", "Poppler is not installed. Please ensure Poppler is installed and in the system PATH.")
+        sys.exit()
+
     temp_folder = "outputs"
     os.makedirs(temp_folder, exist_ok=True)
 
@@ -80,34 +56,65 @@ def convert_and_split_pdf(pdf_path, filename):
 
     return front_image_path, back_image_path
 
-# Function to create a 3D card (optional and commented out for now)
-def create_3d_card(front_image_path, back_image_path):
-    front_image = Image.open(front_image_path)
-    back_image = Image.open(back_image_path)
+# Function to process the images in the selected folder
+def process_images(folder_path):
+    background_color = (71, 78, 90)  # RGB color for background
 
-    front_image = np.array(front_image) / 255.0
-    back_image = np.array(back_image) / 255.0
+    # Create an output folder if it doesn't exist
+    output_folder = os.path.join(folder_path, "output")
+    os.makedirs(output_folder, exist_ok=True)
 
-    # Texture and mesh creation code commented out for now
-    """
-    front_texture = trimesh.visual.texture.SimpleMaterial(image=front_image)
-    back_texture = trimesh.visual.texture.SimpleMaterial(image=back_image)
+    # Iterate through each file in the folder
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
 
-    front_mesh = trimesh.creation.box(extents=(2, 0.01, 3), visual=front_texture)
-    back_mesh = trimesh.creation.box(extents=(2, 0.01, 3), visual=back_texture)
-    back_mesh.apply_translation([0, -0.01, 0])
+        # Process image files only (ignoring other file types)
+        if filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
+            with Image.open(file_path) as img:
+                # Get the largest dimension (width or height) to determine the new square size
+                max_dimension = max(img.size)  # The largest between width and height
+                
+                # Create a new square image with the background color based on the largest dimension
+                square_img = Image.new('RGB', (max_dimension, max_dimension), background_color)
 
-    combined_mesh = trimesh.util.concatenate([front_mesh, back_mesh])
-    model_path = os.path.join("outputs", f'{filename}_card_model.glb')
-    combined_mesh.export(model_path)
-    """
-    return "3D model created"  # Placeholder for the model creation
+                # Preserve aspect ratio and resize the image to fit within the square
+                img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
 
-# Streamlit UI
-st.title("PDF to 3D Card Converter")
+                # Calculate position to center the image in the new square image
+                img_pos = (
+                    (max_dimension - img.width) // 2,
+                    (max_dimension - img.height) // 2
+                )
 
-st.header("Upload PDF File")
-uploaded_pdf = st.file_uploader("Upload a PDF", type=["pdf"])
+                # Paste the resized image onto the square background
+                square_img.paste(img, img_pos, img if img.mode == 'RGBA' else None)
 
-if uploaded_pdf:
-    process_pdf(uploaded_pdf)
+                # Save the result in the output folder with the same file name
+                output_path = os.path.join(output_folder, filename)
+                square_img.save(output_path, quality=95)  # Save with high quality
+
+    messagebox.showinfo("Success", f"Processed images saved in '{output_folder}'.")
+
+# Function to select the folder using the GUI
+def select_folder():
+    folder_path = filedialog.askdirectory()
+    if folder_path:
+        process_images(folder_path)
+
+# Create the GUI window
+def create_gui():
+    root = tk.Tk()
+    root.title("Image Processor")
+
+    label = tk.Label(root, text="Select a folder with images:")
+    label.pack(pady=10)
+
+    select_button = tk.Button(root, text="Select Folder", command=select_folder)
+    select_button.pack(pady=10)
+
+    root.geometry("300x150")
+    root.mainloop()
+
+# Main entry point for the script
+if __name__ == "__main__":
+    create_gui()
