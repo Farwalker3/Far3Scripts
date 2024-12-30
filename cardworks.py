@@ -5,6 +5,7 @@ import streamlit as st
 from pdf2image import convert_from_path
 from PIL import Image
 import numpy as np
+import tempfile
 
 # Function to check and install required packages
 def install(package):
@@ -24,9 +25,14 @@ for package in required_packages:
 # Function to process the uploaded PDF and convert it to images
 def process_pdf(pdf_file):
     try:
+        # Save the uploaded file to a temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            tmp_file.write(pdf_file.read())
+            tmp_file_path = tmp_file.name
+
         # Convert the uploaded PDF to images
         filename = os.path.splitext(pdf_file.name)[0]
-        front_image_path, back_image_path = convert_and_split_pdf(pdf_file, filename)
+        front_image_path, back_image_path = convert_and_split_pdf(tmp_file_path, filename)
 
         # Optionally, you can uncomment this to create the 3D model
         # model_path = create_3d_card(front_image_path, back_image_path)
@@ -46,8 +52,8 @@ def process_pdf(pdf_file):
         st.error(f"An error occurred: {e}")
 
 # Function to convert and split PDF into front and back images
-def convert_and_split_pdf(pdf_file, filename):
-    pages = convert_from_path(pdf_file, dpi=300)
+def convert_and_split_pdf(pdf_path, filename):
+    pages = convert_from_path(pdf_path, dpi=300)
     temp_folder = "outputs"
     os.makedirs(temp_folder, exist_ok=True)
 
