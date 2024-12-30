@@ -1,8 +1,7 @@
 import os
 import sys
 import subprocess
-import tkinter as tk
-from tkinter import filedialog, messagebox
+import streamlit as st
 from PIL import Image
 from pdf2image import convert_from_path, PDFInfoNotInstalledError
 
@@ -12,7 +11,7 @@ def install_libraries():
         import pip
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pillow", "--quiet"])
     except Exception as e:
-        messagebox.showerror("Error", f"Failed to install libraries: {e}")
+        st.error(f"Failed to install libraries: {e}")
         sys.exit()
 
 # Try to import Pillow, install it if not found
@@ -27,7 +26,7 @@ def convert_and_split_pdf(pdf_path, filename):
     try:
         pages = convert_from_path(pdf_path, dpi=300)
     except PDFInfoNotInstalledError:
-        messagebox.showerror("Poppler Error", "Poppler is not installed. Please ensure Poppler is installed and in the system PATH.")
+        st.error("Poppler is not installed. Please ensure Poppler is installed and in the system PATH.")
         sys.exit()
 
     temp_folder = "outputs"
@@ -56,65 +55,29 @@ def convert_and_split_pdf(pdf_path, filename):
 
     return front_image_path, back_image_path
 
-# Function to process the images in the selected folder
-def process_images(folder_path):
-    background_color = (71, 78, 90)  # RGB color for background
+# Streamlit file uploader and processing
+def upload_pdf_and_process():
+    st.title("PDF to 3D Card Converter")
 
-    # Create an output folder if it doesn't exist
-    output_folder = os.path.join(folder_path, "output")
-    os.makedirs(output_folder, exist_ok=True)
+    # Upload PDF file using Streamlit's file uploader
+    uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
+    if uploaded_file is not None:
+        # Save uploaded file temporarily
+        with open("uploaded.pdf", "wb") as f:
+            f.write(uploaded_file.getbuffer())
 
-    # Iterate through each file in the folder
-    for filename in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, filename)
+        filename = os.path.splitext(uploaded_file.name)[0]
+        try:
+            front_image_path, back_image_path = convert_and_split_pdf("uploaded.pdf", filename)
 
-        # Process image files only (ignoring other file types)
-        if filename.lower().endswith(('.png', '.webp', '.jpg', '.jpeg')):
-            with Image.open(file_path) as img:
-                # Get the largest dimension (width or height) to determine the new square size
-                max_dimension = max(img.size)  # The largest between width and height
-                
-                # Create a new square image with the background color based on the largest dimension
-                square_img = Image.new('RGB', (max_dimension, max_dimension), background_color)
+            st.image(front_image_path, caption="Front of the Card", use_column_width=True)
+            st.image(back_image_path, caption="Back of the Card", use_column_width=True)
 
-                # Preserve aspect ratio and resize the image to fit within the square
-                img.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+            st.success(f"PDF processed successfully. Images saved as {front_image_path} and {back_image_path}")
 
-                # Calculate position to center the image in the new square image
-                img_pos = (
-                    (max_dimension - img.width) // 2,
-                    (max_dimension - img.height) // 2
-                )
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-                # Paste the resized image onto the square background
-                square_img.paste(img, img_pos, img if img.mode == 'RGBA' else None)
-
-                # Save the result in the output folder with the same file name
-                output_path = os.path.join(output_folder, filename)
-                square_img.save(output_path, quality=95)  # Save with high quality
-
-    messagebox.showinfo("Success", f"Processed images saved in '{output_folder}'.")
-
-# Function to select the folder using the GUI
-def select_folder():
-    folder_path = filedialog.askdirectory()
-    if folder_path:
-        process_images(folder_path)
-
-# Create the GUI window
-def create_gui():
-    root = tk.Tk()
-    root.title("Image Processor")
-
-    label = tk.Label(root, text="Select a folder with images:")
-    label.pack(pady=10)
-
-    select_button = tk.Button(root, text="Select Folder", command=select_folder)
-    select_button.pack(pady=10)
-
-    root.geometry("300x150")
-    root.mainloop()
-
-# Main entry point for the script
+# Main function to run the app
 if __name__ == "__main__":
-    create_gui()
+    upload_pdf_and_process()
